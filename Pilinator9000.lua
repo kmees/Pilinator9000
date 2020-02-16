@@ -224,12 +224,16 @@ function Addon:ConvertRaid(raidType)
   end
 end
 
+function Addon:CanRequestLeader()
+  if self.creating or self.joining or not self.officer then return false end
+
+  return not UnitIsGroupLeader("player") or not self:PlayerIsMasterLooter()
+end
+
 function Addon:RequestLeader()
-  if self.officer and self.raidType ~= nil and not UnitIsGroupLeader("player") then
-    self:SendCommMessage("pilinator",
-                         self:Serialize({action = 'request_leader', raidType = self.raidType}),
-                         "GUILD")
-  end
+  self:SendCommMessage("pilinator",
+                       self:Serialize({action = 'request_leader', raidType = self.raidType}),
+                       "GUILD")
 end
 
 function Addon:AnnounceRaids()
@@ -422,8 +426,7 @@ function Addon:UpdateUI()
 
       if self.officer then
         self.ui.raids[i].convertBtn:SetDisabled(true)
-        self.ui.raids[i].leaderBtn:SetDisabled(self.creating or self.joining or
-                                                 UnitIsGroupLeader("player"))
+        self.ui.raids[i].leaderBtn:SetDisabled(not self:CanRequestLeader())
       end
     else
       self.ui.raids[i].joinBtn:SetDisabled(false)
@@ -457,18 +460,12 @@ function Addon:PromoteAll()
   end
 end
 
-function Addon:PromoteLeader(leaderName)
-  self:Debug('PromoteLeader: ' .. leaderName)
-  if (UnitIsGroupLeader("player") and UnitName("player") ~= leaderName) then
-    for i = 1, GetNumGroupMembers() do
-      local name = GetRaidRosterInfo(i)
-      if (name == leaderName) then
-        SetLootMethod("master", name)
-        PromoteToLeader(name)
-      else
-        self:Debug(name .. ', ' .. leaderName)
-      end
-    end
+function Addon:PromoteLeader(name)
+  self:Debug('PromoteLeader: ' .. name)
+
+  if (UnitIsGroupLeader("player")) then
+    SetLootMethod("master", name)
+    PromoteToLeader(name)
   end
 end
 
@@ -483,6 +480,12 @@ function Addon:UnitIsInRaid(unitName)
   else
     return false
   end
+end
+
+function Addon:PlayerIsMasterLooter()
+  local loot, index = GetLootMethod()
+
+  return loot == 'master' and index == 0
 end
 
 function Addon:Show(retries)
