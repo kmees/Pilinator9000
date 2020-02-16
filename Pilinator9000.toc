@@ -1,0 +1,9 @@
+## Interface: 11303
+## Title: |cFFFF0000Pilinator|r |cFFFFFF009000|r
+## Author: <Praxis> Elyvilon (EU-Zandalar Tribe)
+## Version: 0.1
+## SavedVariables: Pilinator9000DB
+
+embeds.xml
+
+Pilinator9000.lua
