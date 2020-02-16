@@ -169,7 +169,7 @@ function Addon:HandleRosterUpdate()
     local raidSize = GetNumGroupMembers()
     if (IsInGroup() and self.raidSizes[self.raidType] ~= raidSize) then
       self.raidSizes[self.raidType] = raidSize
-      self:PromoteAll()
+      self:PromoteAssistantAll()
       self:SendCommMessage("pilinator", self:Serialize(
                              {action = 'update', raidType = self.raidType, raidSize = raidSize}),
                            "GUILD")
@@ -451,7 +451,7 @@ function Addon:InitializeRaid()
   SetLootMethod("master", UnitName('player'))
 end
 
-function Addon:PromoteAll()
+function Addon:PromoteAssistantAll()
   if (UnitIsGroupLeader("player")) then
     for i = 1, GetNumGroupMembers() do
       local name, rank = GetRaidRosterInfo(i)
