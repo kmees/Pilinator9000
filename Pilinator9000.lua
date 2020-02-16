@@ -68,7 +68,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
       if UnitIsGroupLeader("player") then self:InitializeRaid() end
       -- case 2: player is in old raid
     elseif msg.raidType == self.raidType then
-      self:ScheduleTimer(function() Addon:JoinOrCreateRaid(msg.raidType) end, 1)
+      self:JoinOrCreateRaid(msg.raidType, math.random(3) + 2)
     end
   end
 
@@ -181,17 +181,15 @@ end
 -- * USER ACTIONS *
 -- ****************
 
-function Addon:JoinOrCreateRaid(raidType)
+function Addon:JoinOrCreateRaid(raidType, delay)
   self:Debug("JoinOrCreateRaid: " .. raidType)
 
-  if IsInGroup() and self.raidType ~= nil then
-    self.switching = true
+  if IsInGroup() then
+    if self.raidType ~= nil then self.switching = true end
     LeaveParty()
 
-    self:ScheduleTimer(function() Addon:JoinOrCreateRaid(raidType) end, 1)
+    self:ScheduleTimer(function() self:JoinOrCreateRaid(raidType) end, delay or 1)
   else
-    LeaveParty()
-
     self.active = true
     self.joining = true
     self.creating = true
