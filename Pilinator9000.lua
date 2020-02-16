@@ -9,16 +9,30 @@ function Addon:OnInitialize()
   self.db = LibStub("AceDB-3.0"):New("Pilinator9000DB")
   self.officer = false
 
+  self:Reset()
+
   self:RegisterComm("pilinator", "CommHandler")
   self:RegisterComm("unitscan", "UnitscanHandler")
   self:RegisterEvent("PARTY_INVITE_REQUEST", "HandleGroupInvite")
   self:RegisterEvent("GROUP_ROSTER_UPDATE", "HandleRosterUpdate")
 
-  self:Reset()
+  self:WaitForGuildInfo(60)
+end
 
-  self:ScheduleTimer(function() self:InitializeUI() end, 5)
+function Addon:WaitForGuildInfo(retries)
+  retries = retries or 0
 
-  self:SendCommMessage("pilinator", self:Serialize({action = 'get_info'}), "GUILD")
+  local gName, _, gRank = GetGuildInfo("player")
+  self:Debug('WaitForGuildInfo: ' .. tostring(gName) .. ':' .. tostring(gRank))
+
+  if gName ~= nil then
+    self.officer = gRank <= 1
+    self:InitializeUI()
+
+    self:SendCommMessage("pilinator", self:Serialize({action = 'get_info'}), "GUILD")
+  elseif retries > 0 then
+    self:ScheduleTimer(function() Addon:WaitForGuildInfo(retries - 1) end, 1)
+  end
 end
 
 -- ******************
@@ -28,7 +42,7 @@ end
 function Addon:UnitscanHandler(prefix, msg, channel)
   if prefix ~= 'unitscan' then return end
 
-  if (self.ui.window) then self.ui.window:Show() end
+  self:Show()
 end
 
 function Addon:CommHandler(prefix, serializedMsg, channel, sender)
@@ -94,7 +108,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
     end
     self.raidSizes = msg.raidSizes
 
-    self.ui.window:Show()
+    self:Show(10)
   end
 
   if msg.action == 'request_leader' and self.raidType == msg.raidType and
@@ -255,7 +269,7 @@ do
 end
 
 function Addon:InitializeUI()
-  self:SetOfficer()
+  self:Debug("InitializeUI")
 
   self.ui = {window = nil, raids = {}}
 
@@ -471,6 +485,16 @@ function Addon:UnitIsInRaid(unitName)
   end
 end
 
+function Addon:Show(retries)
+  retries = retries or 0
+
+  if self.ui ~= nil and self.ui.window ~= nil then
+    self.ui.window:Show()
+  elseif retries > 0 then
+    self:ScheduleTimer(function() Addon:Show(retries - 1) end, 1)
+  end
+end
+
 function Addon:Reset()
   self:Debug("Reset")
 
@@ -485,6 +509,8 @@ end
 
 function Addon:SetOfficer()
   local gName, gRankName, gRank = GetGuildInfo("player")
+  self:Debug('SetOfficer: ' .. tostring(gName) .. ' ' .. tostring(gRankName) .. ' ' ..
+               tostring(gRank))
   self.officer = gRank ~= nil and gRank <= 1
 end
 
@@ -495,6 +521,7 @@ function Addon:Dump()
   self:Debug('creating: ' .. tostring(self.creating))
   self:Debug('joining: ' .. tostring(self.joining))
   self:Debug('switching: ' .. tostring(self.switching))
+  self:Debug('officer: ' .. tostring(self.officer))
   self:Debug('raidType: ' .. tostring(self.raidType))
   self:Debug('raidSizes: ' .. tostring(self.raidSizes[1]) .. ', ' .. tostring(self.raidSizes[2]) ..
                ', ' .. tostring(self.raidSizes[3]))
@@ -527,6 +554,6 @@ function Addon:HandleSlashCmd(input)
     self.db.global.debug = not self.db.global.debug
     self:Print('Debug set to: ' .. tostring(self.db.global.debug))
   elseif (input == 'show') then
-    if self.ui.window ~= nil then self.ui.window:Show() end
+    self:Show(true)
   end
 end
