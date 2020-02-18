@@ -8,6 +8,7 @@ local RAID_INDICES = {summon = 1, kill = 2, pvp = 3}
 function Addon:OnInitialize()
   self.db = LibStub("AceDB-3.0"):New("Pilinator9000DB")
   self.db.global.addonUsers = self.db.global.addonUsers or {}
+  self.hidden = false
   self.officer = false
 
   self:Reset()
@@ -43,7 +44,7 @@ end
 function Addon:UnitscanHandler(prefix, msg, channel)
   if prefix ~= 'unitscan' then return end
 
-  self:Show()
+  self:Show(3)
 end
 
 function Addon:CommHandler(prefix, serializedMsg, channel, sender)
@@ -91,7 +92,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   end
 
   if msg.action == 'get_info' then
-    if IsInGroup() and self:PlayerIsLeader() then
+    if IsInGroup() and self:PlayerIsLeader() and self.raidType ~= nil then
       self:SendCommMessage("pilinator", self:Serialize(
                              {
           action = 'info',
@@ -305,6 +306,7 @@ function Addon:InitializeUI()
     end
     local window = AceGUI:Create("Window")
     window:SetCallback("OnClose", function(widget)
+      self.hidden = true
       window:Hide()
       -- AceGUI:Release(widget)
       -- Addon.frame = nil
@@ -526,10 +528,14 @@ function Addon:PlayerIsMasterLooter()
   return loot == 'master' and index == 0
 end
 
-function Addon:Show(retries)
+function Addon:Show(retries, force)
   retries = retries or 0
+  force = force or false
+
+  if self.hidden and not force then return end
 
   if self.ui ~= nil and self.ui.window ~= nil then
+    self.hidden = false
     self.ui.window:Show()
   elseif retries > 0 then
     self:ScheduleTimer(function() Addon:Show(retries - 1) end, 1)
@@ -595,7 +601,7 @@ function Addon:HandleSlashCmd(input)
     self.db.global.debug = not self.db.global.debug
     self:Print('Debug set to: ' .. tostring(self.db.global.debug))
   elseif (input == 'show') then
-    self:Show(true)
+    self:Show(3, true)
   elseif (input == 'sync') then
     self:RequestSync()
   end
