@@ -7,6 +7,7 @@ local RAID_INDICES = {summon = 1, kill = 2, pvp = 3}
 
 function Addon:OnInitialize()
   self.db = LibStub("AceDB-3.0"):New("Pilinator9000DB")
+  self.db.global.addonUsers = self.db.global.addonUsers or {}
   self.officer = false
 
   self:Reset()
@@ -57,7 +58,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   local player = UnitName('player')
 
   if msg.action == 'join' and msg.raidType == self.raidType and sender ~= player then
-    if (IsInRaid() and UnitIsGroupLeader("player")) or self.creating then InviteUnit(sender) end
+    if (IsInRaid() and self:PlayerIsLeader()) or self.creating then InviteUnit(sender) end
   end
 
   if msg.action == 'convert' then
@@ -65,7 +66,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
     if player == msg.leader or self:UnitIsInRaid(msg.leader) then
       self.raidType = msg.raidType
 
-      if UnitIsGroupLeader("player") then self:InitializeRaid() end
+      if UnitIsGroupLeader('player') then self:InitializeRaid() end
       -- case 2: player is in old raid
     elseif msg.raidType == self.raidType then
       self:JoinOrCreateRaid(msg.raidType, math.random(3) + 2)
@@ -79,7 +80,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   if msg.action == 'left' then
     self.raidSizes[msg.raidType] = 0
 
-    if (self.raidType == msg.raidType and UnitIsGroupLeader('player')) then
+    if (self.raidType == msg.raidType and self:PlayerIsLeader()) then
       self:SendCommMessage("pilinator", self:Serialize(
                              {
           action = 'update',
@@ -90,7 +91,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   end
 
   if msg.action == 'get_info' then
-    if IsInGroup() and UnitIsGroupLeader("player") then
+    if IsInGroup() and self:PlayerIsLeader() then
       self:SendCommMessage("pilinator", self:Serialize(
                              {
           action = 'info',
@@ -102,6 +103,8 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   end
 
   if msg.action == 'info' then
+    self.db.global.addonUsers[sender] = true
+
     if msg.inRaid then
       self.active = true
       self.raidType = msg.raidType
@@ -112,9 +115,9 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   end
 
   if msg.action == 'request_leader' and self.raidType == msg.raidType and
-    UnitIsGroupLeader("player") then self:PromoteLeader(sender) end
+    UnitIsGroupLeader('player') then self:PromoteLeader(sender) end
 
-  if msg.action == 'announce' and UnitIsGroupLeader("player") and self.raidType ~= nil then
+  if msg.action == 'announce' and self:PlayerIsLeader() and self.raidType ~= nil then
     if not self.lastAnnounce or GetTime() - self.lastAnnounce > 10 then
       self.lastAnnounce = GetTime()
 
@@ -125,6 +128,12 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
       SendChatMessage(chatMsg, "GUILD")
     end
   end
+
+  if msg.action == 'request_sync' then
+    self:SendCommMessage("pilinator", self:Serialize({action = 'sync'}), "GUILD", sender)
+  end
+
+  if msg.action == 'sync' then self.db.global.addonUsers[sender] = true end
 end
 
 -- ******************
@@ -161,18 +170,21 @@ function Addon:HandleRosterUpdate()
     self.switching = false
   end
 
-  if (UnitIsGroupLeader("player")) then
+  if (UnitIsGroupLeader('player')) then
     self.leader = true
 
     if (IsInGroup() and not IsInRaid()) then self:InitializeRaid() end
+  end
 
+  if (self:PlayerIsLeader() and self.raidType ~= nil) then
     local raidSize = GetNumGroupMembers()
     if (IsInGroup() and self.raidSizes[self.raidType] ~= raidSize) then
       self.raidSizes[self.raidType] = raidSize
-      self:PromoteAssistantAll()
       self:SendCommMessage("pilinator", self:Serialize(
                              {action = 'update', raidType = self.raidType, raidSize = raidSize}),
                            "GUILD")
+
+      if (UnitIsGroupLeader("player")) then self:PromoteAssistantAll() end
     end
   end
 end
@@ -207,7 +219,7 @@ end
 function Addon:ConvertRaid(raidType)
   self:Debug("ConvertRaid: " .. raidType)
 
-  if (UnitIsGroupLeader("player")) then
+  if (UnitIsGroupLeader('player')) then
     self:SendCommMessage("pilinator", self:Serialize(
                            {action = 'update', raidType = self.raidType, raidSize = 0}), "GUILD")
 
@@ -225,7 +237,7 @@ end
 function Addon:CanRequestLeader()
   if self.creating or self.joining or not self.officer then return false end
 
-  return not UnitIsGroupLeader("player") or not self:PlayerIsMasterLooter()
+  return not UnitIsGroupLeader('player') or not self:PlayerIsMasterLooter()
 end
 
 function Addon:RequestLeader()
@@ -237,6 +249,12 @@ end
 function Addon:AnnounceRaids()
   if self.officer then
     self:SendCommMessage("pilinator", self:Serialize({action = 'announce'}), "GUILD")
+  end
+end
+
+function Addon:RequestSync()
+  if self.officer then
+    self:SendCommMessage("pilinator", self:Serialize({action = 'request_sync'}), "GUILD")
   end
 end
 
@@ -429,7 +447,7 @@ function Addon:UpdateUI()
     else
       self.ui.raids[i].joinBtn:SetDisabled(false)
       if self.officer then
-        self.ui.raids[i].convertBtn:SetDisabled(not IsInGroup() or not UnitIsGroupLeader("player"))
+        self.ui.raids[i].convertBtn:SetDisabled(not IsInGroup() or not UnitIsGroupLeader('player'))
         self.ui.raids[i].leaderBtn:SetDisabled(true)
       end
     end
@@ -450,7 +468,7 @@ function Addon:InitializeRaid()
 end
 
 function Addon:PromoteAssistantAll()
-  if (UnitIsGroupLeader("player")) then
+  if (UnitIsGroupLeader('player')) then
     for i = 1, GetNumGroupMembers() do
       local name, rank = GetRaidRosterInfo(i)
       if (rank == 0) then PromoteToAssistant(name) end
@@ -461,7 +479,7 @@ end
 function Addon:PromoteLeader(name)
   self:Debug('PromoteLeader: ' .. name)
 
-  if (UnitIsGroupLeader("player")) then
+  if (UnitIsGroupLeader('player')) then
     SetLootMethod("master", name)
     PromoteToLeader(name)
   end
@@ -480,6 +498,28 @@ function Addon:UnitIsInRaid(unitName)
   end
 end
 
+function Addon:PlayerIsLeader()
+  if IsInRaid() and UnitIsGroupLeader('player') then
+    return true
+  elseif IsInRaid() then
+    local leaderIsOffline = false
+    local leaderSubstitute = nil
+    for i = 1, GetNumGroupMembers() do
+      local name, rank, _, _, _, _, _, online = GetRaidRosterInfo(i)
+
+      leaderIsOffline = leaderIsOffline or (rank == 2 and not online)
+
+      if leaderSubstitute == nil and online and rank == 1 and self.db.global.addonUsers[name] then
+        -- self:Debug("Leader substitute: " .. name)
+        leaderSubstitute = name
+      end
+    end
+
+    return leaderIsOffline and leaderSubstitute == UnitName("player")
+  else
+    return false
+  end
+end
 function Addon:PlayerIsMasterLooter()
   local loot, index = GetLootMethod()
 
@@ -556,5 +596,7 @@ function Addon:HandleSlashCmd(input)
     self:Print('Debug set to: ' .. tostring(self.db.global.debug))
   elseif (input == 'show') then
     self:Show(true)
+  elseif (input == 'sync') then
+    self:RequestSync()
   end
 end
