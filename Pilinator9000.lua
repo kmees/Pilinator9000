@@ -31,7 +31,8 @@ function Addon:WaitForGuildInfo(retries)
     self.officer = gRank <= 1
     self:InitializeUI()
 
-    self:SendCommMessage("pilinator", self:Serialize({action = 'get_info'}), "GUILD")
+    self:SendCommMessage("pilinator", self:Serialize(
+                           {action = 'get_info', leader = UnitIsGroupLeader("player")}), "GUILD")
   elseif retries > 0 then
     self:ScheduleTimer(function() Addon:WaitForGuildInfo(retries - 1) end, 1)
   end
@@ -92,7 +93,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   end
 
   if msg.action == 'get_info' then
-    if IsInGroup() and self:PlayerIsLeader() and self.raidType ~= nil then
+    if IsInGroup() and self:PlayerIsLeader(msg.leader) and self.raidType ~= nil then
       self:SendCommMessage("pilinator", self:Serialize(
                              {
           action = 'info',
@@ -148,6 +149,8 @@ function Addon:HandleGroupInvite()
     self.creating = false
     self.switching = false
     AcceptGroup()
+  else
+    self.invited = true
   end
 end
 
@@ -162,7 +165,11 @@ function Addon:HandleRosterUpdate()
     if self.switching == false then self:Reset() end
   end
 
-  if not self.active then return end
+  if self.invited and IsInRaid() then
+    self.invited = false
+
+    self:SendCommMessage("pilinator", self:Serialize({action = 'get_info'}), "GUILD")
+  end
 
   if (self.joining) then
     StaticPopup_Hide("PARTY_INVITE")
@@ -198,7 +205,7 @@ function Addon:JoinOrCreateRaid(raidType, delay)
   self:Debug("JoinOrCreateRaid: " .. raidType)
 
   if IsInGroup() then
-    if self.raidType ~= nil then self.switching = true end
+    self.switching = self.raidType ~= nil
     LeaveParty()
 
     self:ScheduleTimer(function() self:JoinOrCreateRaid(raidType) end, delay or 1)
@@ -500,18 +507,20 @@ function Addon:UnitIsInRaid(unitName)
   end
 end
 
-function Addon:PlayerIsLeader()
+function Addon:PlayerIsLeader(leaderIsOffline)
+  leaderIsOffline = leaderIsOffline or false
+
   if IsInRaid() and UnitIsGroupLeader('player') then
     return true
   elseif IsInRaid() then
-    local leaderIsOffline = false
     local leaderSubstitute = nil
     for i = 1, GetNumGroupMembers() do
       local name, rank, _, _, _, _, _, online = GetRaidRosterInfo(i)
 
       leaderIsOffline = leaderIsOffline or (rank == 2 and not online)
 
-      if leaderSubstitute == nil and online and rank == 1 and self.db.global.addonUsers[name] then
+      if leaderSubstitute == nil and online and rank == 1 and
+        (name == UnitName("player") or self.db.global.addonUsers[name]) then
         -- self:Debug("Leader substitute: " .. name)
         leaderSubstitute = name
       end
@@ -549,6 +558,7 @@ function Addon:Reset()
   self.creating = false
   self.joining = false
   self.switching = false
+  self.invited = false
   self.leader = false
   self.raidType = nil
   self.raidSizes = {}
