@@ -1,5 +1,8 @@
-Pilinator9000 = LibStub("AceAddon-3.0"):NewAddon("Pilinator9000", "AceConsole-3.0", "AceEvent-3.0",
-                                                 "AceComm-3.0", "AceSerializer-3.0", "AceTimer-3.0")
+Pilinator9000 = LibStub("AceAddon-3.0"):NewAddon("Pilinator9000",
+                                                 "AceConsole-3.0",
+                                                 "AceEvent-3.0", "AceComm-3.0",
+                                                 "AceSerializer-3.0",
+                                                 "AceTimer-3.0")
 
 local Addon = Pilinator9000
 
@@ -64,7 +67,9 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   local player = UnitName('player')
 
   if msg.action == 'join' and msg.raidType == self.raidType and sender ~= player then
-    if (IsInRaid() and self:PlayerIsLeader()) or self.creating then InviteUnit(sender) end
+    if (IsInRaid() and self:PlayerIsLeader()) or self.creating then
+      InviteUnit(sender)
+    end
   end
 
   if msg.action == 'convert' then
@@ -87,7 +92,11 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
     self.raidSizes[msg.raidType] = 0
 
     if (self.raidType == msg.raidType and self:PlayerIsLeader()) then
-      self:Broadcast({action = 'update', raidType = self.raidType, raidSize = GetNumGroupMembers()})
+      self:Broadcast({
+        action = 'update',
+        raidType = self.raidType,
+        raidSize = GetNumGroupMembers()
+      })
     end
   end
 
@@ -121,9 +130,10 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
     if not self.lastAnnounce or GetTime() - self.lastAnnounce > 10 then
       self.lastAnnounce = GetTime()
 
-      local chatMsg =
-        self:GetRaidNameWithSize(self.raidType, GetNumGroupMembers()) .. ': whisper ' ..
-          UnitName("player") .. ' \'pili\' for invite!'
+      local chatMsg = self:GetRaidNameWithSize(self.raidType,
+                                               GetNumGroupMembers()) ..
+                        ': whisper ' .. UnitName("player") ..
+                        ' \'pili\' for invite!'
 
       SendChatMessage(chatMsg, "GUILD")
     end
@@ -186,7 +196,11 @@ function Addon:HandleRosterUpdate()
     local raidSize = GetNumGroupMembers()
     if (IsInGroup() and self.raidSizes[self.raidType] ~= raidSize) then
       self.raidSizes[self.raidType] = raidSize
-      self:Broadcast({action = 'update', raidType = self.raidType, raidSize = raidSize})
+      self:Broadcast({
+        action = 'update',
+        raidType = self.raidType,
+        raidSize = raidSize
+      })
 
       if (UnitIsGroupLeader("player")) then self:PromoteAssistantAll() end
     end
@@ -204,7 +218,8 @@ function Addon:JoinOrCreateRaid(raidType, delay)
     self.switching = self.raidType ~= nil
     LeaveParty()
 
-    self:ScheduleTimer(function() self:JoinOrCreateRaid(raidType) end, delay or 1)
+    self:ScheduleTimer(function() self:JoinOrCreateRaid(raidType) end,
+                       delay or 1)
   else
     self.active = true
     self.joining = true
@@ -230,7 +245,11 @@ function Addon:ConvertRaid(raidType)
     self.creating = false
     self.raidType = raidType
 
-    self:Broadcast({action = 'convert', raidType = raidType, leader = UnitName("player")})
+    self:Broadcast({
+      action = 'convert',
+      raidType = raidType,
+      leader = UnitName("player")
+    })
   end
 end
 
@@ -240,11 +259,17 @@ function Addon:CanRequestLeader()
   return not UnitIsGroupLeader('player') or not self:PlayerIsMasterLooter()
 end
 
-function Addon:RequestLeader() self:Broadcast({action = 'request_leader', raidType = self.raidType}) end
+function Addon:RequestLeader()
+  self:Broadcast({action = 'request_leader', raidType = self.raidType})
+end
 
-function Addon:AnnounceRaids() if self.officer then self:Broadcast({action = 'announce'}) end end
+function Addon:AnnounceRaids()
+  if self.officer then self:Broadcast({action = 'announce'}) end
+end
 
-function Addon:RequestSync() if self.officer then self:Broadcast({action = 'request_sync'}) end end
+function Addon:RequestSync()
+  if self.officer then self:Broadcast({action = 'request_sync'}) end
+end
 
 -- *******
 -- * UI *
@@ -306,8 +331,8 @@ function Addon:InitializeUI()
     window.frame:SetClampedToScreen(true)
 
     if (self.db.global.window ~= nil) then
-      window:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", self.db.global.window.X,
-                      self.db.global.window.Y)
+      window:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT",
+                      self.db.global.window.X, self.db.global.window.Y)
       if not self.db.global.debug then window:Hide() end
     end
 
@@ -329,10 +354,12 @@ function Addon:InitializeUI()
 
       if self.officer then
         local leaderBtn = AceGUI:Create("Button")
-        leaderBtn.frame:SetNormalTexture("Interface\\GroupFrame\\UI-Group-LeaderIcon")
+        leaderBtn.frame:SetNormalTexture(
+          "Interface\\GroupFrame\\UI-Group-LeaderIcon")
         -- leaderBtn:SetText('L')
         leaderBtn:SetWidth(24)
-        leaderBtn:SetCallback("OnClick", function() Addon:RequestLeader(index) end)
+        leaderBtn:SetCallback("OnClick",
+                              function() Addon:RequestLeader(index) end)
         g:AddChild(leaderBtn)
 
         local space = AceGUI:Create('Label')
@@ -350,7 +377,8 @@ function Addon:InitializeUI()
       local joinBtn = AceGUI:Create("Button")
       joinBtn:SetText(self:GetJoinRaidLabel(i))
       joinBtn:SetWidth(90)
-      joinBtn:SetCallback("OnClick", function() Addon:JoinOrCreateRaid(index) end)
+      joinBtn:SetCallback("OnClick",
+                          function() Addon:JoinOrCreateRaid(index) end)
       g:AddChild(joinBtn)
 
       self.ui.raids[index].title = title
@@ -366,14 +394,16 @@ function Addon:InitializeUI()
         convertBtn:SetText('Convert')
         convertBtn:SetWidth(70)
         convertBtn:SetDisabled(true)
-        convertBtn:SetCallback("OnClick", function() Addon:ConfirmConvertRaid(index) end)
+        convertBtn:SetCallback("OnClick",
+                               function() Addon:ConfirmConvertRaid(index) end)
         g:AddChild(convertBtn)
 
         self.ui.raids[index].convertBtn = convertBtn
 
         StaticPopupDialogs['PILINATOR_CONFIRM_CONVERT_' .. tostring(index)] =
           {
-            text = "Do you want to convert current group/raid to " .. self:GetRaidName(index) .. "?",
+            text = "Do you want to convert current group/raid to " ..
+              self:GetRaidName(index) .. "?",
             button1 = "Yes",
             button2 = "No",
             OnAccept = function() self:ConvertRaid(index) end,
@@ -415,7 +445,10 @@ function Addon:SaveUI()
   local window = self.ui.window
 
   if (window ~= nil) then
-    self.db.global.window = {X = window.frame:GetLeft(), Y = window.frame:GetTop()}
+    self.db.global.window = {
+      X = window.frame:GetLeft(),
+      Y = window.frame:GetTop()
+    }
   end
 end
 
@@ -424,7 +457,8 @@ function Addon:UpdateUI()
 
   for i = 1, 3 do
     self.ui.raids[i].title:SetText(self:GetRaidTitle(i, self.raidSizes[i]))
-    disableAnnounce = disableAnnounce and (self.raidSizes[i] == nil or self.raidSizes[i] == 0)
+    disableAnnounce = disableAnnounce and
+                        (self.raidSizes[i] == nil or self.raidSizes[i] == 0)
 
     if (self.raidType == i) then
       self.ui.raids[i].joinBtn:SetDisabled(true)
@@ -436,7 +470,8 @@ function Addon:UpdateUI()
     else
       self.ui.raids[i].joinBtn:SetDisabled(false)
       if self.officer then
-        self.ui.raids[i].convertBtn:SetDisabled(not IsInGroup() or not UnitIsGroupLeader('player'))
+        self.ui.raids[i].convertBtn:SetDisabled(
+          not IsInGroup() or not UnitIsGroupLeader('player'))
         self.ui.raids[i].leaderBtn:SetDisabled(true)
       end
     end
@@ -449,7 +484,9 @@ end
 -- * UTILITY *
 -- ***********
 
-function Addon:Debug(payload) if self.db.global.debug then self:Print(payload) end end
+function Addon:Debug(payload)
+  if self.db.global.debug then self:Print(payload) end
+end
 
 function Addon:InitializeRaid()
   if not IsInRaid() then ConvertToRaid() end
@@ -499,7 +536,8 @@ function Addon:PlayerIsLeader(leaderIsOffline)
 
       leaderIsOffline = leaderIsOffline or (rank == 2 and not online)
 
-      if leaderSubstitute == nil and online and rank == 1 and self:IsAddonUser(name) then
+      if leaderSubstitute == nil and online and rank == 1 and
+        self:IsAddonUser(name) then
         -- self:Debug("Leader substitute: " .. name)
         leaderSubstitute = name
       end
@@ -543,11 +581,13 @@ function Addon:Reset()
   self.raidSizes = {}
 end
 
-function Addon:IsAddonUser(name) return self.db.global.addonUsers[name] or name ==
-                                          UnitName("player") end
+function Addon:IsAddonUser(name)
+  return self.db.global.addonUsers[name] or name == UnitName("player")
+end
 function Addon:SetAddonUser(name) self.db.global.addonUsers[name] = true end
 function Addon:Broadcast(payload, channel, target)
-  return self:SendCommMessage("pilinator", self:Serialize(payload), channel or "GUILD", target)
+  return self:SendCommMessage("pilinator", self:Serialize(payload),
+                              channel or "GUILD", target)
 end
 
 function Addon:Dump()
@@ -559,8 +599,9 @@ function Addon:Dump()
   self:Debug('switching: ' .. tostring(self.switching))
   self:Debug('officer: ' .. tostring(self.officer))
   self:Debug('raidType: ' .. tostring(self.raidType))
-  self:Debug('raidSizes: ' .. tostring(self.raidSizes[1]) .. ', ' .. tostring(self.raidSizes[2]) ..
-               ', ' .. tostring(self.raidSizes[3]))
+  self:Debug('raidSizes: ' .. tostring(self.raidSizes[1]) .. ', ' ..
+               tostring(self.raidSizes[2]) .. ', ' ..
+               tostring(self.raidSizes[3]))
 end
 
 -- ******************
