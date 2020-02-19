@@ -152,7 +152,10 @@ function Addon:HandleRosterUpdate()
     if (self.leader and self.raidType ~= nil) then
       self:Broadcast({action = 'left', raidType = self.raidType})
     end
-    if self.switching == false then self:Reset() end
+    if not self.switching then
+      self:Reset()
+      self:Broadcast({action = 'get_info'})
+    end
   end
 
   if self.invited and IsInRaid() then
