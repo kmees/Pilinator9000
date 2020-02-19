@@ -41,10 +41,15 @@ end
 -- * COMM HANDLERS *
 -- ******************
 
-function Addon:UnitscanHandler(prefix, msg, channel)
-  if prefix ~= 'unitscan' then return end
+do
+  local forceShow = true
+  function Addon:UnitscanHandler(prefix, msg, channel)
+    if prefix ~= 'unitscan' then return end
 
-  self:Show(3)
+    self:Show(3, forceShow)
+
+    forceShow = false
+  end
 end
 
 function Addon:CommHandler(prefix, serializedMsg, channel, sender)
