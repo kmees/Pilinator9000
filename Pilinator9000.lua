@@ -31,8 +31,7 @@ function Addon:WaitForGuildInfo(retries)
     self.officer = gRank <= 1
     self:InitializeUI()
 
-    self:SendCommMessage("pilinator", self:Serialize(
-                           {action = 'get_info', leader = UnitIsGroupLeader("player")}), "GUILD")
+    self:Broadcast({action = 'get_info', leader = UnitIsGroupLeader("player")})
   elseif retries > 0 then
     self:ScheduleTimer(function() Addon:WaitForGuildInfo(retries - 1) end, 1)
   end
@@ -83,29 +82,23 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
     self.raidSizes[msg.raidType] = 0
 
     if (self.raidType == msg.raidType and self:PlayerIsLeader()) then
-      self:SendCommMessage("pilinator", self:Serialize(
-                             {
-          action = 'update',
-          raidType = self.raidType,
-          raidSize = GetNumGroupMembers()
-        }), "GUILD")
+      self:Broadcast({action = 'update', raidType = self.raidType, raidSize = GetNumGroupMembers()})
     end
   end
 
   if msg.action == 'get_info' then
     if IsInGroup() and self:PlayerIsLeader(msg.leader) and self.raidType ~= nil then
-      self:SendCommMessage("pilinator", self:Serialize(
-                             {
-          action = 'info',
-          inRaid = Addon:UnitIsInRaid(sender),
-          raidType = self.raidType,
-          raidSizes = self.raidSizes
-        }), "WHISPER", sender)
+      self:Broadcast({
+        action = 'info',
+        inRaid = Addon:UnitIsInRaid(sender),
+        raidType = self.raidType,
+        raidSizes = self.raidSizes
+      }, "WHISPER", sender)
     end
   end
 
   if msg.action == 'info' then
-    self.db.global.addonUsers[sender] = true
+    self:SetAddonUser(sender)
 
     if msg.inRaid then
       self.active = true
@@ -131,11 +124,9 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
     end
   end
 
-  if msg.action == 'request_sync' then
-    self:SendCommMessage("pilinator", self:Serialize({action = 'sync'}), "GUILD", sender)
-  end
+  if msg.action == 'request_sync' then self:Broadcast({action = 'sync'}) end
 
-  if msg.action == 'sync' then self.db.global.addonUsers[sender] = true end
+  if msg.action == 'sync' then self:SetAddonUser(sender) end
 end
 
 -- ******************
@@ -159,8 +150,7 @@ function Addon:HandleRosterUpdate()
 
   if not IsInGroup() then
     if (self.leader and self.raidType ~= nil) then
-      self:SendCommMessage("pilinator", self:Serialize({action = 'left', raidType = self.raidType}),
-                           "GUILD")
+      self:Broadcast({action = 'left', raidType = self.raidType})
     end
     if self.switching == false then self:Reset() end
   end
@@ -168,7 +158,7 @@ function Addon:HandleRosterUpdate()
   if self.invited and IsInRaid() then
     self.invited = false
 
-    self:SendCommMessage("pilinator", self:Serialize({action = 'get_info'}), "GUILD")
+    self:Broadcast({action = 'get_info'})
   end
 
   if (self.joining) then
@@ -188,9 +178,7 @@ function Addon:HandleRosterUpdate()
     local raidSize = GetNumGroupMembers()
     if (IsInGroup() and self.raidSizes[self.raidType] ~= raidSize) then
       self.raidSizes[self.raidType] = raidSize
-      self:SendCommMessage("pilinator", self:Serialize(
-                             {action = 'update', raidType = self.raidType, raidSize = raidSize}),
-                           "GUILD")
+      self:Broadcast({action = 'update', raidType = self.raidType, raidSize = raidSize})
 
       if (UnitIsGroupLeader("player")) then self:PromoteAssistantAll() end
     end
@@ -215,8 +203,7 @@ function Addon:JoinOrCreateRaid(raidType, delay)
     self.creating = true
     self.raidType = raidType
 
-    self:SendCommMessage("pilinator", self:Serialize({action = 'join', raidType = raidType}),
-                         "GUILD")
+    self:Broadcast({action = 'join', raidType = raidType})
   end
 end
 
@@ -228,17 +215,14 @@ function Addon:ConvertRaid(raidType)
   self:Debug("ConvertRaid: " .. raidType)
 
   if (UnitIsGroupLeader('player')) then
-    self:SendCommMessage("pilinator", self:Serialize(
-                           {action = 'update', raidType = self.raidType, raidSize = 0}), "GUILD")
+    self:Broadcast({action = 'update', raidType = self.raidType, raidSize = 0})
 
     self.active = true
     self.joining = false
     self.creating = false
     self.raidType = raidType
 
-    self:SendCommMessage("pilinator", self:Serialize(
-                           {action = 'convert', raidType = raidType, leader = UnitName("player")}),
-                         "GUILD")
+    self:Broadcast({action = 'convert', raidType = raidType, leader = UnitName("player")})
   end
 end
 
@@ -248,23 +232,11 @@ function Addon:CanRequestLeader()
   return not UnitIsGroupLeader('player') or not self:PlayerIsMasterLooter()
 end
 
-function Addon:RequestLeader()
-  self:SendCommMessage("pilinator",
-                       self:Serialize({action = 'request_leader', raidType = self.raidType}),
-                       "GUILD")
-end
+function Addon:RequestLeader() self:Broadcast({action = 'request_leader', raidType = self.raidType}) end
 
-function Addon:AnnounceRaids()
-  if self.officer then
-    self:SendCommMessage("pilinator", self:Serialize({action = 'announce'}), "GUILD")
-  end
-end
+function Addon:AnnounceRaids() if self.officer then self:Broadcast({action = 'announce'}) end end
 
-function Addon:RequestSync()
-  if self.officer then
-    self:SendCommMessage("pilinator", self:Serialize({action = 'request_sync'}), "GUILD")
-  end
-end
+function Addon:RequestSync() if self.officer then self:Broadcast({action = 'request_sync'}) end end
 
 -- *******
 -- * UI *
@@ -519,8 +491,7 @@ function Addon:PlayerIsLeader(leaderIsOffline)
 
       leaderIsOffline = leaderIsOffline or (rank == 2 and not online)
 
-      if leaderSubstitute == nil and online and rank == 1 and
-        (name == UnitName("player") or self.db.global.addonUsers[name]) then
+      if leaderSubstitute == nil and online and rank == 1 and self:IsAddonUser(name) then
         -- self:Debug("Leader substitute: " .. name)
         leaderSubstitute = name
       end
@@ -564,11 +535,11 @@ function Addon:Reset()
   self.raidSizes = {}
 end
 
-function Addon:SetOfficer()
-  local gName, gRankName, gRank = GetGuildInfo("player")
-  self:Debug('SetOfficer: ' .. tostring(gName) .. ' ' .. tostring(gRankName) .. ' ' ..
-               tostring(gRank))
-  self.officer = gRank ~= nil and gRank <= 1
+function Addon:IsAddonUser(name) return self.db.global.addonUsers[name] or name ==
+                                          UnitName("player") end
+function Addon:SetAddonUser(name) self.db.global.addonUsers[name] = true end
+function Addon:Broadcast(payload, channel, target)
+  return self:SendCommMessage("pilinator", self:Serialize(payload), channel or "GUILD", target)
 end
 
 function Addon:Dump()
