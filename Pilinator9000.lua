@@ -101,7 +101,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   end
 
   if msg.action == 'get_info' then
-    if IsInGroup() and self:PlayerIsLeader(msg.leader) and self.raidType ~= nil then
+    if self:IsActive() and self:PlayerIsLeader(msg.leader) then
       self:Broadcast({
         action = 'info',
         inRaid = Addon:UnitIsInRaid(sender),
@@ -114,10 +114,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   if msg.action == 'info' then
     self:SetAddonUser(sender)
 
-    if msg.inRaid then
-      self.active = true
-      self.raidType = msg.raidType
-    end
+    if msg.inRaid then self.raidType = msg.raidType end
     self.raidSizes = msg.raidSizes
 
     self:Show(10)
@@ -126,7 +123,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   if msg.action == 'request_leader' and self.raidType == msg.raidType and
     UnitIsGroupLeader('player') then self:PromoteLeader(sender) end
 
-  if msg.action == 'announce' and self:PlayerIsLeader() and self.raidType ~= nil then
+  if msg.action == 'announce' and self:PlayerIsLeader() then
     if not self.lastAnnounce or GetTime() - self.lastAnnounce > 10 then
       self.lastAnnounce = GetTime()
 
@@ -171,6 +168,8 @@ function Addon:HandleRosterUpdate()
       self:Reset()
       self:Broadcast({action = 'get_info'})
     end
+
+    self.leader = false
   end
 
   if self.invited and IsInRaid() then
@@ -189,10 +188,14 @@ function Addon:HandleRosterUpdate()
   if (UnitIsGroupLeader('player')) then
     self.leader = true
 
-    if (IsInGroup() and not IsInRaid()) then self:InitializeRaid() end
+    if (IsInGroup() and not IsInRaid() and self:IsActive()) then
+      self:InitializeRaid()
+    end
+  else
+    self.leader = false
   end
 
-  if (self:PlayerIsLeader() and self.raidType ~= nil) then
+  if (self:PlayerIsLeader()) then
     local raidSize = GetNumGroupMembers()
     if (IsInGroup() and self.raidSizes[self.raidType] ~= raidSize) then
       self.raidSizes[self.raidType] = raidSize
@@ -221,7 +224,6 @@ function Addon:JoinOrCreateRaid(raidType, delay)
     self:ScheduleTimer(function() self:JoinOrCreateRaid(raidType) end,
                        delay or 1)
   else
-    self.active = true
     self.joining = true
     self.creating = true
     self.raidType = raidType
@@ -240,7 +242,6 @@ function Addon:ConvertRaid(raidType)
   if (UnitIsGroupLeader('player')) then
     self:Broadcast({action = 'update', raidType = self.raidType, raidSize = 0})
 
-    self.active = true
     self.joining = false
     self.creating = false
     self.raidType = raidType
@@ -527,6 +528,8 @@ end
 function Addon:PlayerIsLeader(leaderIsOffline)
   leaderIsOffline = leaderIsOffline or false
 
+  if not self:IsActive() then return false end
+
   if IsInRaid() and UnitIsGroupLeader('player') then
     return true
   elseif IsInRaid() then
@@ -571,7 +574,6 @@ end
 function Addon:Reset()
   self:Debug("Reset")
 
-  self.active = false
   self.creating = false
   self.joining = false
   self.switching = false
@@ -590,9 +592,10 @@ function Addon:Broadcast(payload, channel, target)
                               channel or "GUILD", target)
 end
 
+function Addon:IsActive() return self.raidType ~= nil end
+
 function Addon:Dump()
   self:Debug('debug: ' .. tostring(self.db.global.debug))
-  self:Debug('active: ' .. tostring(self.active))
   self:Debug('leader: ' .. tostring(self.leader))
   self:Debug('creating: ' .. tostring(self.creating))
   self:Debug('joining: ' .. tostring(self.joining))
