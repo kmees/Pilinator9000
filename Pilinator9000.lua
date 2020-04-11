@@ -6,7 +6,15 @@ Pilinator9000 = LibStub("AceAddon-3.0"):NewAddon("Pilinator9000",
 
 local Addon = Pilinator9000
 
-local RAID_INDICES = {summon = 1, kill = 2, pvp = 3}
+local RAID_TYPES = {
+  summon = 1,
+  kill = 2,
+  pvp = 3,
+  ashenvale = 10,
+  duskwood = 11,
+  feralas = 12,
+  hinterlands = 13
+}
 
 function Addon:OnInitialize()
   self.db = LibStub("AceDB-3.0"):New("Pilinator9000DB")
@@ -80,7 +88,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
       if UnitIsGroupLeader('player') then self:InitializeRaid() end
       -- case 2: player is in old raid
     elseif msg.raidType == self.raidType then
-      self:JoinOrCreateRaid(msg.raidType, math.random(3) + 2)
+      self:JoinOrCreateRaid(msg.raidType, math.random(5) + 2)
     end
   end
 
@@ -217,6 +225,8 @@ end
 function Addon:JoinOrCreateRaid(raidType, delay)
   self:Debug("JoinOrCreateRaid: " .. raidType)
 
+  if (raidType == nil) then return end
+
   if IsInGroup() then
     self.switching = self.raidType ~= nil
     LeaveParty()
@@ -238,6 +248,8 @@ end
 
 function Addon:ConvertRaid(raidType)
   self:Debug("ConvertRaid: " .. raidType)
+
+  if (raidType == nil) then return end
 
   if (UnitIsGroupLeader('player')) then
     self:Broadcast({action = 'update', raidType = self.raidType, raidSize = 0})
@@ -614,28 +626,25 @@ end
 Addon:RegisterChatCommand("pili", "HandleSlashCmd")
 
 function Addon:HandleSlashCmd(input)
-  if (input == "reset") then
+  local action, args = strsplit(" ", input, 2)
+  if (action == "reset") then
     self:Reset()
-  elseif (input == "join summon") then
-    self:JoinOrCreateRaid(RAID_INDICES["summon"])
-  elseif (input == "join kill") then
-    self:JoinOrCreateRaid(RAID_INDICES["kill"])
-  elseif (input == "join pvp") then
-    self:JoinOrCreateRaid(RAID_INDICES["pvp"])
-  elseif (input == "convert summon") then
-    self:ConvertRaid(RAID_INDICES["sumon"])
-  elseif (input == "convert kill") then
-    self:ConvertRaid(RAID_INDICES["kill"])
-  elseif (input == "convert pvp") then
-    self:ConvertRaid(RAID_INDICES["pvp"])
-  elseif (input == "dump") then
+  elseif (action == "join") then
+    local raidId = RAID_TYPES[args]
+
+    if (raidId ~= nil) then self:JoinOrCreateRaid(raidId) end
+  elseif (action == "convert") then
+    local raidId = RAID_TYPES[args]
+
+    if (raidId ~= nil) then self:ConvertRaid(raidId) end
+  elseif (action == "dump") then
     self:Dump()
-  elseif (input == "debug") then
+  elseif (action == "debug") then
     self.db.global.debug = not self.db.global.debug
     self:Print('Debug set to: ' .. tostring(self.db.global.debug))
-  elseif (input == 'show') then
+  elseif (action == 'show') then
     self:Show(3, true)
-  elseif (input == 'sync') then
+  elseif (action == 'sync') then
     self:RequestSync()
   end
 end
