@@ -6,19 +6,17 @@ Pilinator9000 = LibStub("AceAddon-3.0"):NewAddon("Pilinator9000",
 
 local Addon = Pilinator9000
 
-local RAID_TYPES = {
-  summon = 1,
-  kill = 2,
-  pvp = 3,
-  ashenvale = 10,
-  duskwood = 11,
-  feralas = 12,
-  hinterlands = 13
+local RAID_NAMES = {
+  "Summon", "Kill", "PvP", "Ashenvale", "Duskwood", "Feralas", "Hinterlands"
 }
+local RAID_TYPES = {}
+
+do for id, name in ipairs(RAID_NAMES) do RAID_TYPES[string.lower(name)] = id end end
 
 function Addon:OnInitialize()
   self.db = LibStub("AceDB-3.0"):New("Pilinator9000DB")
   self.db.global.addonUsers = self.db.global.addonUsers or {}
+  self.db.global.mode = self.db.global.mode or 'default'
   self.hidden = false
   self.officer = false
 
@@ -289,8 +287,6 @@ end
 -- *******
 
 do
-  local names = {'Summon', 'Kill', 'PvP'}
-
   local function padSize(size)
     if size == nil or size <= 0 then return '00' end
     if size < 10 then return '0' .. size end
@@ -306,27 +302,124 @@ do
   end
 
   function Addon:GetRaidNameWithSize(index, size)
-    return '[' .. padSize(size) .. '/40] ' .. names[index] .. ' Raid'
+    return '[' .. padSize(size) .. '/40] ' .. RAID_NAMES[index] .. ' Raid'
   end
 
-  function Addon:GetRaidName(index) return names[index] .. ' Raid' end
+  function Addon:GetRaidName(index) return RAID_NAMES[index] .. ' Raid' end
 
-  function Addon:GetJoinRaidLabel(index) return 'Join ' .. names[index] end
+  function Addon:GetJoinRaidLabel(index) return 'Join ' .. RAID_NAMES[index] end
 end
 
-function Addon:InitializeUI()
+function Addon:InitializeTabUI(container, event, mode)
+  container:ReleaseChildren()
+
+  self.db.global.mode = mode
+
+  local AceGUI = LibStub("AceGUI-3.0")
+  local startRaid = mode == "default" and 1 or 4
+  local endRaid = mode == "default" and 3 or 7
+
+  local width = self.ui.width - 20
+
+  for i = startRaid, endRaid do
+    local index = i
+
+    local g = AceGUI:Create('SimpleGroup')
+    g:SetWidth(width)
+    g:SetLayout('Flow')
+    container:AddChild(g)
+
+    local paddingL = AceGUI:Create('Label')
+    paddingL:SetText(' ')
+    paddingL:SetWidth(5)
+    g:AddChild(paddingL)
+
+    if self.officer then
+      local leaderBtn = AceGUI:Create("Button")
+      leaderBtn.frame:SetNormalTexture(
+        "Interface\\GroupFrame\\UI-Group-LeaderIcon")
+      -- leaderBtn:SetText('L')
+      leaderBtn:SetWidth(24)
+      leaderBtn:SetCallback("OnClick", function()
+        Addon:RequestLeader(index)
+      end)
+      g:AddChild(leaderBtn)
+
+      local space = AceGUI:Create('Label')
+      space:SetText(' ')
+      space:SetWidth(5)
+      g:AddChild(space)
+
+      self.ui.raids[index].leaderBtn = leaderBtn
+    end
+
+    local title = AceGUI:Create('Label')
+    title:SetText(self:GetRaidTitle(i, 0))
+    title:SetWidth(130)
+    g:AddChild(title)
+    local joinBtn = AceGUI:Create("Button")
+    joinBtn.frame:SetNormalTexture("")
+    joinBtn:SetText(self:GetJoinRaidLabel(i))
+    joinBtn:SetWidth(90)
+    joinBtn:SetCallback("OnClick", function() Addon:JoinOrCreateRaid(index) end)
+    g:AddChild(joinBtn)
+
+    self.ui.raids[index].title = title
+    self.ui.raids[index].joinBtn = joinBtn
+
+    if self.officer then
+      local space = AceGUI:Create('Label')
+      space:SetText(' ')
+      space:SetWidth(25)
+      g:AddChild(space)
+
+      local convertBtn = AceGUI:Create("Button")
+      convertBtn.frame:SetNormalTexture("")
+      convertBtn:SetText('Convert')
+      convertBtn:SetWidth(70)
+      convertBtn:SetDisabled(true)
+      convertBtn:SetCallback("OnClick",
+                             function() Addon:ConfirmConvertRaid(index) end)
+      g:AddChild(convertBtn)
+
+      self.ui.raids[index].convertBtn = convertBtn
+
+      StaticPopupDialogs['PILINATOR_CONFIRM_CONVERT_' .. tostring(index)] =
+        {
+          text = "Do you want to convert current group/raid to " ..
+            self:GetRaidName(index) .. "?",
+          button1 = "Yes",
+          button2 = "No",
+          OnAccept = function() self:ConvertRaid(index) end,
+          timeout = 0,
+          whileDead = true,
+          hideOnEscape = true,
+          preferredIndex = 3 -- avoid some UI taint, see http://www.wowace.com/announcements/how-to-avoid-some-ui-taint/
+        }
+    end
+  end
+end
+
+function Addon:InitializeUI(reinitialize)
   self:Debug("InitializeUI")
 
-  self.ui = {window = nil, raids = {}}
+  local AceGUI = LibStub("AceGUI-3.0")
+
+  if (reinitialize and self.ui.window) then
+    self.ui.window:Hide()
+    AceGUI:Release(self.ui.window)
+  end
+
+  self.ui = {window = nil, raids = {}, width = 0}
+
+  for idx in ipairs(RAID_NAMES) do self.ui.raids[idx] = {} end
 
   do
-    local AceGUI = LibStub("AceGUI-3.0")
-
     -- Create a container window
-    local width = 250
-    local height = 135
+    local width = 280
+    local height = 220
     if self.officer then
-      width = width + 130
+      width = width + 120
       height = height + 32
     end
     local window = AceGUI:Create("Window")
@@ -343,90 +436,8 @@ function Addon:InitializeUI()
     window:SetLayout("Flow")
     window.frame:SetClampedToScreen(true)
 
-    if (self.db.global.window ~= nil) then
-      window:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT",
-                      self.db.global.window.X, self.db.global.window.Y)
-      if not self.db.global.debug then window:Hide() end
-    end
-
     self.ui.window = window
-
-    for i = 1, 3 do
-      local index = i
-      self.ui.raids[index] = {}
-
-      local g = AceGUI:Create('SimpleGroup')
-      g:SetWidth(width)
-      g:SetLayout('Flow')
-      window:AddChild(g)
-
-      local paddingL = AceGUI:Create('Label')
-      paddingL:SetText(' ')
-      paddingL:SetWidth(5)
-      g:AddChild(paddingL)
-
-      if self.officer then
-        local leaderBtn = AceGUI:Create("Button")
-        leaderBtn.frame:SetNormalTexture(
-          "Interface\\GroupFrame\\UI-Group-LeaderIcon")
-        -- leaderBtn:SetText('L')
-        leaderBtn:SetWidth(24)
-        leaderBtn:SetCallback("OnClick",
-                              function() Addon:RequestLeader(index) end)
-        g:AddChild(leaderBtn)
-
-        local space = AceGUI:Create('Label')
-        space:SetText(' ')
-        space:SetWidth(5)
-        g:AddChild(space)
-
-        self.ui.raids[index].leaderBtn = leaderBtn
-      end
-
-      local title = AceGUI:Create('Label')
-      title:SetText(self:GetRaidTitle(i, 0))
-      title:SetWidth(130)
-      g:AddChild(title)
-      local joinBtn = AceGUI:Create("Button")
-      joinBtn:SetText(self:GetJoinRaidLabel(i))
-      joinBtn:SetWidth(90)
-      joinBtn:SetCallback("OnClick",
-                          function() Addon:JoinOrCreateRaid(index) end)
-      g:AddChild(joinBtn)
-
-      self.ui.raids[index].title = title
-      self.ui.raids[index].joinBtn = joinBtn
-
-      if self.officer then
-        local space = AceGUI:Create('Label')
-        space:SetText(' ')
-        space:SetWidth(25)
-        g:AddChild(space)
-
-        local convertBtn = AceGUI:Create("Button")
-        convertBtn:SetText('Convert')
-        convertBtn:SetWidth(70)
-        convertBtn:SetDisabled(true)
-        convertBtn:SetCallback("OnClick",
-                               function() Addon:ConfirmConvertRaid(index) end)
-        g:AddChild(convertBtn)
-
-        self.ui.raids[index].convertBtn = convertBtn
-
-        StaticPopupDialogs['PILINATOR_CONFIRM_CONVERT_' .. tostring(index)] =
-          {
-            text = "Do you want to convert current group/raid to " ..
-              self:GetRaidName(index) .. "?",
-            button1 = "Yes",
-            button2 = "No",
-            OnAccept = function() self:ConvertRaid(index) end,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-            preferredIndex = 3 -- avoid some UI taint, see http://www.wowace.com/announcements/how-to-avoid-some-ui-taint/
-          }
-      end
-    end
+    self.ui.width = width
 
     if self.officer then
       local g = AceGUI:Create('SimpleGroup')
@@ -448,6 +459,28 @@ function Addon:InitializeUI()
 
       self.ui.announceBtn = announceBtn
     end
+
+    local tabGroup = AceGUI:Create("TabGroup")
+    tabGroup:SetWidth(width - 24)
+    tabGroup:SetLayout("Flow")
+
+    tabGroup:SetTabs({
+      {text = "Kazuregos", value = "default"},
+      {text = "Nightmare Dragons", value = "4dragons"}
+    })
+    tabGroup:SetCallback("OnGroupSelected", function(container, event, mode)
+      Addon:InitializeTabUI(container, event, mode)
+    end)
+
+    tabGroup:SelectTab(self.db.global.mode)
+
+    window:AddChild(tabGroup)
+
+    if (self.db.global.window ~= nil) then
+      window:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT",
+                      self.db.global.window.X, self.db.global.window.Y)
+      if not self.db.global.debug then window:Hide() end
+    end
   end
 
   self.updateUiTimerId = self:ScheduleRepeatingTimer("UpdateUI", 1)
@@ -468,24 +501,28 @@ end
 function Addon:UpdateUI()
   local disableAnnounce = true
 
-  for i = 1, 3 do
-    self.ui.raids[i].title:SetText(self:GetRaidTitle(i, self.raidSizes[i]))
-    disableAnnounce = disableAnnounce and
-                        (self.raidSizes[i] == nil or self.raidSizes[i] == 0)
+  for i = 1, 7 do
+    if ((self.db.global.mode == "default" and i <= 3) or
+      (self.db.global.mode == "4dragons" and i >= 4)) then
 
-    if (self.raidType == i) then
-      self.ui.raids[i].joinBtn:SetDisabled(true)
+      self.ui.raids[i].title:SetText(self:GetRaidTitle(i, self.raidSizes[i]))
+      disableAnnounce = disableAnnounce and
+                          (self.raidSizes[i] == nil or self.raidSizes[i] == 0)
 
-      if self.officer then
-        self.ui.raids[i].convertBtn:SetDisabled(true)
-        self.ui.raids[i].leaderBtn:SetDisabled(not self:CanRequestLeader())
-      end
-    else
-      self.ui.raids[i].joinBtn:SetDisabled(false)
-      if self.officer then
-        self.ui.raids[i].convertBtn:SetDisabled(
-          not IsInGroup() or not UnitIsGroupLeader('player'))
-        self.ui.raids[i].leaderBtn:SetDisabled(true)
+      if (self.raidType == i) then
+        self.ui.raids[i].joinBtn:SetDisabled(true)
+
+        if self.officer then
+          self.ui.raids[i].convertBtn:SetDisabled(true)
+          self.ui.raids[i].leaderBtn:SetDisabled(not self:CanRequestLeader())
+        end
+      else
+        self.ui.raids[i].joinBtn:SetDisabled(false)
+        if self.officer then
+          self.ui.raids[i].convertBtn:SetDisabled(
+            not IsInGroup() or not UnitIsGroupLeader('player'))
+          self.ui.raids[i].leaderBtn:SetDisabled(true)
+        end
       end
     end
   end
@@ -630,11 +667,11 @@ function Addon:HandleSlashCmd(input)
   if (action == "reset") then
     self:Reset()
   elseif (action == "join") then
-    local raidId = RAID_TYPES[args]
+    local raidId = RAID_TYPES[string.lower(args)]
 
     if (raidId ~= nil) then self:JoinOrCreateRaid(raidId) end
   elseif (action == "convert") then
-    local raidId = RAID_TYPES[args]
+    local raidId = RAID_TYPES[string.lower(args)]
 
     if (raidId ~= nil) then self:ConvertRaid(raidId) end
   elseif (action == "dump") then
