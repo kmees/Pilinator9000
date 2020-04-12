@@ -7,9 +7,10 @@ Pilinator9000 = LibStub("AceAddon-3.0"):NewAddon("Pilinator9000",
 local Addon = Pilinator9000
 
 local RAID_NAMES = {
-  "Summon", "Kill", "PvP", "Ashenvale", "Duskwood", "Feralas", "Hinterlands"
+  "Summon", "Kill", "PvP", "Ashenvale", "Duskwood", "Feralas", "The Hinterlands"
 }
 local RAID_TYPES = {}
+local RAID_BOSSES = {}
 
 do for id, name in ipairs(RAID_NAMES) do RAID_TYPES[string.lower(name)] = id end end
 
@@ -24,6 +25,7 @@ function Addon:OnInitialize()
 
   self:RegisterComm("pilinator", "CommHandler")
   self:RegisterComm("unitscan", "UnitscanHandler")
+  self:RegisterComm("unitscan_dbg", "UnitscanHandler")
   self:RegisterEvent("PARTY_INVITE_REQUEST", "HandleGroupInvite")
   self:RegisterEvent("GROUP_ROSTER_UPDATE", "HandleRosterUpdate")
 
@@ -53,8 +55,18 @@ end
 do
   local forceShow = true
   function Addon:UnitscanHandler(prefix, msg, channel)
-    if prefix ~= 'unitscan' then return end
+    local name, zone = strsplit(",", msg)
 
+    if (zone) then
+      local raidType = RAID_TYPES[string.lower(zone)]
+
+      self:Debug("raidType: " .. tostring(raidType))
+      if (raidType) then
+        RAID_BOSSES[raidType] = name
+      else
+        for i = 1, 3 do RAID_BOSSES[i] = name end
+      end
+    end
     self:Show(3, forceShow)
 
     forceShow = false
@@ -302,10 +314,18 @@ do
   end
 
   function Addon:GetRaidNameWithSize(index, size)
-    return '[' .. padSize(size) .. '/40] ' .. RAID_NAMES[index] .. ' Raid'
+    return '[' .. padSize(size) .. '/40] ' .. Addon:GetRaidName(index)
   end
 
-  function Addon:GetRaidName(index) return RAID_NAMES[index] .. ' Raid' end
+  function Addon:GetRaidName(index)
+    local boss = RAID_BOSSES[index]
+
+    if (boss) then
+      return boss .. ' - ' .. RAID_NAMES[index]
+    else
+      return RAID_NAMES[index] .. ' Raid'
+    end
+  end
 
   function Addon:GetJoinRaidLabel(index) return 'Join ' .. RAID_NAMES[index] end
 end
