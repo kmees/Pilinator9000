@@ -42,7 +42,10 @@ function Addon:WaitForGuildInfo(retries)
     self.officer = gRank <= 1
     self:InitializeUI()
 
-    self:Broadcast({action = 'get_info', leader = UnitIsGroupLeader("player")})
+    self:Broadcast({
+      action = 'get_info',
+      useSubstitute = UnitIsGroupLeader("player")
+    })
   elseif retries > 0 then
     self:ScheduleTimer(function() Addon:WaitForGuildInfo(retries - 1) end, 1)
   end
@@ -119,7 +122,7 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   end
 
   if msg.action == 'get_info' then
-    if self:IsActive() and self:PlayerIsLeader(msg.leader) then
+    if self:IsActive() and self:PlayerIsLeader(msg.useSubstitute) then
       self:Broadcast({
         action = 'info',
         inRaid = Addon:UnitIsInRaid(sender),
@@ -235,7 +238,7 @@ end
 function Addon:JoinOrCreateRaid(raidType, delay)
   self:Debug("JoinOrCreateRaid: " .. raidType)
 
-  if (raidType == nil) then return end
+  if (raidType == nil or self.raidSizes[raidType] >= 40) then return end
 
   if IsInGroup() then
     self.switching = self.raidType ~= nil
@@ -529,9 +532,11 @@ function Addon:UpdateUI()
       disableAnnounce = disableAnnounce and
                           (self.raidSizes[i] == nil or self.raidSizes[i] == 0)
 
-      if (self.raidType == i) then
+      if (self.raidSizes[i] >= 40) then
         self.ui.raids[i].joinBtn:SetDisabled(true)
+      end
 
+      if (self.raidType == i) then
         if self.officer then
           self.ui.raids[i].convertBtn:SetDisabled(true)
           self.ui.raids[i].leaderBtn:SetDisabled(not self:CanRequestLeader())
@@ -594,8 +599,8 @@ function Addon:UnitIsInRaid(unitName)
   end
 end
 
-function Addon:PlayerIsLeader(leaderIsOffline)
-  leaderIsOffline = leaderIsOffline or false
+function Addon:PlayerIsLeader(useSubstitute)
+  useSubstitute = useSubstitute or false
 
   if not self:IsActive() then return false end
 
@@ -606,7 +611,7 @@ function Addon:PlayerIsLeader(leaderIsOffline)
     for i = 1, GetNumGroupMembers() do
       local name, rank, _, _, _, _, _, online = GetRaidRosterInfo(i)
 
-      leaderIsOffline = leaderIsOffline or (rank == 2 and not online)
+      useSubstitute = useSubstitute or (rank == 2 and not online)
 
       if leaderSubstitute == nil and online and rank == 1 and
         self:IsAddonUser(name) then
@@ -615,7 +620,7 @@ function Addon:PlayerIsLeader(leaderIsOffline)
       end
     end
 
-    return leaderIsOffline and leaderSubstitute == UnitName("player")
+    return useSubstitute and leaderSubstitute == UnitName("player")
   else
     return false
   end
