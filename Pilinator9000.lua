@@ -238,7 +238,8 @@ end
 function Addon:JoinOrCreateRaid(raidType, delay)
   self:Debug("JoinOrCreateRaid: " .. raidType)
 
-  if (raidType == nil or self.raidSizes[raidType] >= 40) then return end
+  if (raidType == nil or
+    (self.raidSizes[raidType] and self.raidSizes[raidType] >= 40)) then return end
 
   if IsInGroup() then
     self.switching = self.raidType ~= nil
@@ -532,7 +533,7 @@ function Addon:UpdateUI()
       disableAnnounce = disableAnnounce and
                           (self.raidSizes[i] == nil or self.raidSizes[i] == 0)
 
-      if (self.raidSizes[i] >= 40) then
+      if (self.raidSizes[i] and self.raidSizes[i] >= 40) then
         self.ui.raids[i].joinBtn:SetDisabled(true)
       end
 
