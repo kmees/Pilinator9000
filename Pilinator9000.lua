@@ -88,7 +88,12 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
 
   if msg.action == 'join' and msg.raidType == self.raidType and sender ~= player then
     if (IsInRaid() and self:PlayerIsLeader()) or self.creating then
-      InviteUnit(sender)
+      if (GetNumGroupMembers() >= 40) then
+        SendChatMessage(self:GetRaidName(msg.raidType) .. ' is full!',
+                        'WHISPER', nil, sender)
+      else
+        InviteUnit(sender)
+      end
     end
   end
 
@@ -237,8 +242,11 @@ end
 function Addon:JoinOrCreateRaid(raidType, delay)
   self:Debug("JoinOrCreateRaid: " .. raidType)
 
-  if (raidType == nil or
-    (self.raidSizes[raidType] and self.raidSizes[raidType] >= 40)) then return end
+  if raidType == nil then return end
+  if (self.raidSizes[raidType] and self.raidSizes[raidType] >= 40) then
+    self:Print('ERROR: ' .. self:GetRaidName(raidType) .. ' is full!')
+    return
+  end
 
   if IsInGroup() then
     self.switching = self.raidType ~= nil
@@ -531,10 +539,6 @@ function Addon:UpdateUI()
       self.ui.raids[i].title:SetText(self:GetRaidTitle(i, self.raidSizes[i]))
       disableAnnounce = disableAnnounce and
                           (self.raidSizes[i] == nil or self.raidSizes[i] == 0)
-
-      if (self.raidSizes[i] and self.raidSizes[i] >= 40) then
-        self.ui.raids[i].joinBtn:SetDisabled(true)
-      end
 
       if (self.raidType == i) then
         if self.officer then
