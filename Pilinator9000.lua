@@ -645,6 +645,15 @@ function Addon:Show(retries, force)
   end
 end
 
+function Addon:Toggle()
+  if self.hidden then
+    self:Show(1, true)
+  else
+    self.hidden = true
+    self.ui.window:Hide()
+  end
+end
+
 function Addon:Reset()
   self:Debug("Reset")
 
@@ -706,6 +715,8 @@ function Addon:HandleSlashCmd(input)
     self:Print('Debug set to: ' .. tostring(self.db.global.debug))
   elseif (action == 'show') then
     self:Show(3, true)
+  elseif (action == 'toggle') then
+    self:Toggle()
   elseif (action == 'sync') then
     self:RequestSync()
   elseif (action == 'test') then
