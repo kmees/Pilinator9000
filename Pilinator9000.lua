@@ -60,10 +60,9 @@ do
   function Addon:UnitscanHandler(prefix, msg, channel)
     local name, zone = strsplit(",", msg)
 
-    if (zone) then
+    if (zone ~= nil and zone ~= '') then
       local raidType = RAID_TYPES[string.lower(zone)]
 
-      self:Debug("raidType: " .. tostring(raidType))
       if (raidType) then
         RAID_BOSSES[raidType] = name
       else
@@ -709,5 +708,8 @@ function Addon:HandleSlashCmd(input)
     self:Show(3, true)
   elseif (action == 'sync') then
     self:RequestSync()
+  elseif (action == 'test') then
+    self:Print('test')
+    self:UnitscanHandler('unitscan', args, "GUILD")
   end
 end
