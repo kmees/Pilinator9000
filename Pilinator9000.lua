@@ -87,13 +87,17 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
   local player = UnitName('player')
 
   if msg.action == 'join' and msg.raidType == self.raidType and sender ~= player then
-    if (IsInRaid() and self:PlayerIsLeader()) or self.creating then
+    if (IsInRaid() and self:PlayerIsLeader()) then
       if (GetNumGroupMembers() >= 40) then
         SendChatMessage(self:GetRaidName(msg.raidType) .. ' is full!',
                         'WHISPER', nil, sender)
       else
         InviteUnit(sender)
       end
+    elseif self.creating then
+      local delta = math.floor(GetTime() - self.joinTime)
+      self:ScheduleTimer(function() InviteUnit(sender) end,
+                         math.max(1, 5 - delta))
     end
   end
 
@@ -141,6 +145,10 @@ function Addon:CommHandler(prefix, serializedMsg, channel, sender)
 
     if msg.inRaid then self.raidType = msg.raidType end
     self.raidSizes = msg.raidSizes
+
+    if self.creating and self.raidType == msg.raidType then
+      self.creating = false
+    end
 
     self:Show(10)
   end
@@ -257,6 +265,7 @@ function Addon:JoinOrCreateRaid(raidType, delay)
   else
     self.joining = true
     self.creating = true
+    self.joinTime = GetTime()
     self.raidType = raidType
 
     self:Broadcast({action = 'join', raidType = raidType})
@@ -663,6 +672,7 @@ function Addon:Reset()
 
   self.creating = false
   self.joining = false
+  self.joinTime = nil
   self.switching = false
   self.invited = false
   self.leader = false
